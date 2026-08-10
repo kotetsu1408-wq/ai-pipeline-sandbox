@@ -1,8 +1,8 @@
-name: AI Development Loop
+name: AI Development Loop (Hybrid)
 
 on:
   issues:
-    types: [labeled]
+    types: [opened, edited]
 
 permissions:
   contents: write
@@ -10,31 +10,90 @@ permissions:
   pull-requests: write
 
 jobs:
-  ai-development-loop:
-    if: github.event.label.name == 'ai-task'
+  generate-code:
+    if: contains(github.event.issue.labels.*.name, 'ai-task')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Verify pipeline script exists
-        run: |
-          if [ ! -f ".github/scripts/run-pipeline.sh" ]; then
-            echo "::error::run-pipeline.sh がリポジトリに見つかりません"
-            exit 1
-          fi
+      - name: Install Gemini CLI
+        run: npm install -g @google/gemini-cli
 
-      - name: Make pipeline script executable
-        run: chmod +x .github/scripts/run-pipeline.sh
-
-      - name: Execute AI Loop Script
+      - name: Generate Code with Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
-          MAX_ATTEMPTS: 1
-        run: .github/scripts/run-pipeline.sh
+        run: |
+          # Issue内容をGeminiに送信してコード生成
+          PROMPT="あなたはシニアエンジニアです。以下のIssueを実装してください。実装結果のコードのみ返してください。説明は不要です。
+
+Issueタイトル: ${ISSUE_TITLE}
+Issue本文:
+${ISSUE_BODY}"
+
+          # Gemini CLI で生成
+          gemini -m gemini-2.5-flash -p "${PROMPT}" --yolo > generated_code.txt 2>&1 || true
+
+      - name: Create Branch and Commit
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # ブランチ作成
+          BRANCH_NAME="issue-${ISSUE_NUMBER}-ai-generated"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH_NAME}"
+
+          # 生成されたコードをファイルに保存
+          mkdir -p generated
+          cp generated_code.txt "generated/issue-${ISSUE_NUMBER}.txt"
+          git add generated/
+          git commit -m "AI Generated: Issue #${ISSUE_NUMBER}" || true
+
+          # プッシュ
+          git push origin "${BRANCH_NAME}"
+
+          # 出力用に変数を保存
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          PR_TITLE="[AI Generated] Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+          PR_BODY="Gemini が自動生成したコードです。
+
+## 対応Issue
+Issue #${ISSUE_NUMBER}
+
+## 生成内容
+以下のファイルを確認してください：
+- \`generated/issue-${ISSUE_NUMBER}.txt\`
+
+## ネクストステップ
+- [ ] このPRの内容を確認
+- [ ] 必要に応じて修正・コミット
+- [ ] テストが通ることを確認
+- [ ] 承認してマージ"
+
+          gh pr create \
+            --title "${PR_TITLE}" \
+            --body "${PR_BODY}" \
+            --base main \
+            --head "issue-${ISSUE_NUMBER}-ai-generated" \
+            --label "ai-generated" || echo "PR already exists"
+
+      - name: Add Comment to Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "${ISSUE_NUMBER}" \
+            --body "🤖 AI がコード生成を完了しました。PR をご確認ください。"
