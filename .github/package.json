@@ -1,0 +1,8 @@
+{
+  "name": "ai-pipeline-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "echo \"(サンプル) テストはまだありません\" && exit 0"
+  }
+}
