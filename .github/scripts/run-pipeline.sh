@@ -5,10 +5,6 @@ log() {
   echo "[$(date '+%H:%M:%S')] $*"
 }
 
-log "=== AI Development Loop started ==="
-log "Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
-log "Max attempts: ${MAX_ATTEMPTS}"
-
-# ダミー実装: 成功を返す
-log "✓ Verification passed"
+log "=== AI Code Generation Pipeline (Hybrid Mode) ==="
+log "This script is reserved for future use (auto-test, validation)"
 exit 0
