@@ -19,22 +19,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Dependencies
-        run: |
-          if [ -f package.json ]; then npm install; fi
-
-      - name: Install Gemini CLI
-        run: npm install -g @google/gemini-cli
-
       - name: Verify pipeline script exists
         run: |
           if [ ! -f ".github/scripts/run-pipeline.sh" ]; then
-            echo "::error::run-pipeline.sh がリポジトリに見つかりません。コミット/pushされているか確認してください。"
+            echo "::error::run-pipeline.sh がリポジトリに見つかりません"
             exit 1
           fi
 
@@ -48,5 +36,5 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
-          MAX_ATTEMPTS: 3
+          MAX_ATTEMPTS: 1
         run: .github/scripts/run-pipeline.sh
